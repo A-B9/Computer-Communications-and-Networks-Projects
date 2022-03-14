@@ -24,13 +24,13 @@ def main(argv):
 
         received_packet_bytes = bytearray(received_packet[0])
 
-        sequence_number = received_packet_bytes[0:2]
+        #sequence_number = received_packet_bytes[0:2]
         #sequence_number = int.from_bytes(sequence_number, 'big')
         end_of_file = received_packet_bytes[2]
 
         payload_data = received_packet_bytes[3:]
 
-        if end_of_file == 1:
+        if end_of_file == 1: #if the end of the file has been reached.
             file.write(payload_data)
             file.close
             print('<FILE HAS BEEN TRANSFERRED CORRECTLY>')
@@ -38,7 +38,7 @@ def main(argv):
 
         file.write(payload_data)
 
-        received_packet = receiver_socket.recvfrom(BUFF_SIZE)
+        received_packet = receiver_socket.recvfrom(BUFF_SIZE) #receive the next packet from the socket.
 
 if __name__ == "__main__":
     main(sys.argv)
