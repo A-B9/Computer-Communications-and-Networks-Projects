@@ -3,6 +3,7 @@
 from socket import *
 import sys
 import os
+from time import sleep
 
 
 def main(argv):
@@ -10,25 +11,27 @@ def main(argv):
     BUFF_SIZE = 1024 #equivalent to payload length
     HEADER_SIZE = 3
 
+    #command line arguemnts
     HOST_NAME = os.path.basename(argv[1])
     HOST_PORT = int(os.path.basename(argv[2]))
     FILE = os.path.basename(argv[3])
 
-    senderSocket = socket(AF_INET, SOCK_DGRAM)
+    senderSocket = socket(AF_INET, SOCK_DGRAM)#Create socket
 
     file = open(FILE, 'rb') #read the file (store it in file). 'r' means we read the file, 'b' means binary mode such as images.
     read_file = file.read(BUFF_SIZE)
-    packet_no = 0
+    packet_no = 0 #track the current packet being delivered
 
     while (read_file):
         #if eof = 0, not the end of the fileSe
         #if eof = 1, it is the end of the file
         end_of_file = (0).to_bytes(1, 'big')
 
-        print(len(read_file)) #testing line
+        
 
         if (len(read_file) < BUFF_SIZE):
             end_of_file = (1).to_bytes(1, 'big')
+            print("<END OF FILE>")
         
         sequence_number = packet_no.to_bytes(2, 'big')
         
@@ -38,11 +41,16 @@ def main(argv):
         file_to_send[3:] = bytearray(read_file) #the payload occupies the rest of the packet and starts after the end of file flag, therefore it occupies every index on and after index 3
 
         senderSocket.sendto(file_to_send, (HOST_NAME, HOST_PORT))
+        print("<PACKET %d HAS BEEN DELIVERED>"%packet_no)
 
         read_file = file.read(BUFF_SIZE)
         packet_no += 1
+
+        sleep(0.005)
     
     file.close()
+
+    senderSocket.close()
 
 if __name__ == "__main__":
     main(sys.argv)
