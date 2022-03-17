@@ -3,7 +3,6 @@
 from socket import *
 import sys
 import os
-import time
 
 
 BUFF_SIZE = 1027
@@ -29,6 +28,7 @@ def main(argv):
     packets_received = 0
     total_acks_sent = 0
 
+
     print("<READY TO RECEIVE PACKETS>")
     while (received_packet):
 
@@ -47,11 +47,13 @@ def main(argv):
             receiver_socket.sendto(ack, sender_address) #send the ack back to sender
 
             total_acks_sent += 1
+            #end_of_file = int.from_bytes(end_of_file, 'big')
 
-            if end_of_file == 1: #if it is the final packet for the file
+            if end_of_file == (1).to_bytes(1, 'big'): #if it is the final packet for the file
                 file.write(payload_data)
                 file.close()
                 print("FILE HAS BEEN TRANSFERRED CORRECTLY")
+                
                 break
             #if its not the final packet do this
             print("sequence number %d has been saved correctly"% packets_received)
@@ -60,61 +62,23 @@ def main(argv):
 
             last_sequence = ack #update the list of already received packets
 
-            received_packet = receiver_socket.recvfrom(BUFF_SIZE)[0] #receive the next packet
 
-        #else: #if the packet is a duplicate
-         #   receiver_socket.sendto(ack, sender_address)
-          #  total_acks_sent += 1
-           # continue #wait for the correct packet to be received.
+        else: #if the packet is a duplicate
+            receiver_socket.sendto(ack, sender_address)
+            total_acks_sent += 1
+            continue #wait for the correct packet to be received.
+
+        received_packet = receiver_socket.recvfrom(BUFF_SIZE)[0] #receive the next packet
+
+
     print("<PROCESS COMPLETE>")
     print("<TOTAL PACKETS RECEIVED %d>"%packets_received)
     print("<TOTAL ACKS SENT %d>"%total_acks_sent)
 
     file.close
     receiver_socket.close()
-
-
-        #if sequence_number_bytes != last_sequence: #if the packet is new
-
-#            if end_of_file == 1: #if this packet is the last one
- #               file.write(payload_data)
-  #              file.close()
-   #             print("<FILE HAS BEEN TRASNSFERRED CORRECTLY>")
-    #            break
-
-            #otherwise
-     #       file.write(payload_data)
-
-#            last_sequence = sequence_number_bytes #updates the previous sequence number
- #           ack = sequence_number_bytes
-            
-  #          receiver_socket.sendto(ack, sender_address)
-
-   #         received_packet = receiver_socket.recvfrom(BUFF_SIZE)
-
-
-        #if sequence_number_bytes == last_sequence:
-        #    print("WRONG SEQUENCE NUMBER: SEND NAK TO SENDER")
-        #    receiver_socket.sendto(sequence_number_bytes, sender_address)
-        #    #continue
-        #else:
-        #    if end_of_file == 1:
-        #        file.write(payload_data)
-        #        file.close()
-        #        print('<FILE HAS BEEN TRANSFERRED CORRECTLY>')
-        #        break
-        #
-        #    file.write(payload_data)
-        #    
-        #    last_sequence = sequence_number_bytes
-        
-
-        #received_packet = receiver_socket.recvfrom(BUFF_SIZE)
-
-        #print("PACKET NUMBER %d HAS BEEN RECEIVED")
     
     
-    receiver_socket.close()
 
 if __name__ == '__main__':
     main(sys.argv)

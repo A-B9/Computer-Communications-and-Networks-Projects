@@ -9,6 +9,14 @@ import select
 BUFF_SIZE = 1024 #Buffer size
 HEADER_SIZE = 3 #Size of header
 
+
+def milisecondTimer():
+
+    start_time = time.time() * 1000 #1000 seconds in a milisecond. so *1000 to get current time in miliseconds.
+    while True: #loop forever
+        yield time.time() * 1000 - start_time #get the time difference
+
+
 def main(argv):
 
 
@@ -60,12 +68,15 @@ def main(argv):
 
         ###### up to here everything is standard and should work perfect #########
         while True:
+
+
             wait_for_ack = select.select([sender_socket], [], [], 0)
             wait_for_ack = wait_for_ack[0]
 
             if wait_for_ack: #If the receiver contains a 2 byte packet 
+                print("<ISACK PACKET RECEIVED>")
 
-                ack = wait_for_ack[0].recvfrom(2) #store the 2 byte packet as the ACK
+                ack = wait_for_ack[0].recvfrom(2)[0] #store the 2 byte packet as the ACK
                 ack = ack[0:2]
                 if sequence_number == ack: #if the ack is equal to the current sequence number
                     #packet has been received  correctly 
@@ -74,9 +85,13 @@ def main(argv):
 
                 else: #if the ack is not correct
                     print("<INCORRECT ACK RECEIVED, WILL WAIT>") #does nothing
+                    sender_socket.sendto(file_to_send, (HOST_NAME, HOST_PORT))#Resend the packet
+                    re_transmit += 1
+                    total_transmissions += 1
+
                     continue
             else: #if no packets received
-                if next(socket_timer) > RETRY_TIMEOUT: #if the timer is equal to or exceeds RETRY_TIMEOUT
+                if next(socket_timer) >= RETRY_TIMEOUT: #if the timer is equal to or exceeds RETRY_TIMEOUT
                 
                 #from the rdt3.0 FSM we must resend the packet and start the timer again.
 
@@ -85,7 +100,7 @@ def main(argv):
                     total_transmissions += 1
                     socket_timer = milisecondTimer()
 
-                    print("<RETRANSMISSION NUMBER: %d"%re_transmit)
+                    print("<RETRANSMISSION NUMBER: %d>>>>>>>>>>>>>>>>>>>>>>>"%re_transmit)
                     continue
 
         
@@ -93,24 +108,19 @@ def main(argv):
         read_file = file.read(BUFF_SIZE) #read in the next 1024 bytes of the file
         packet_no += 1 #increment the packet number to indicate the process is moving to the next packet
 
-        #time.sleep(0.005)
-        print("<TRANSMITTING NEXT PACKET, PACKET NO %d"%packet_no)
+        time.sleep(0.005)
 
 
     total_time_taken = time.time() - true_start #calculate total runtime of the program once all packets sent
     throughput = (file_size / total_time_taken) #calculate throughput
 
-    print("Number of retransmissions: " + re_transmit + ", Throughput: " + throughput) #necessary output
+    print("Number of retransmissions: " +str(re_transmit) + ", Throughput: " + str(throughput)) #necessary output
 
     file.close() #close file
     sender_socket.close() #close socket
 
 
-def milisecondTimer():
 
-    start_time = time.time() * 1000 #1000 seconds in a milisecond. so *1000 to get current time in miliseconds.
-    while True: #loop forever
-        yield time.time() * 1000 - start_time #get the time difference
 
 
 
