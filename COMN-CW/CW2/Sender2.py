@@ -4,7 +4,6 @@ from socket import *
 import sys
 import os
 import time
-import math
 
 BUFF_SIZE = 1024 #Buffer size
 HEADER_SIZE = 3 #Size of header
