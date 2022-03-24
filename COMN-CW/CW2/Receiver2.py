@@ -20,15 +20,16 @@ def main(argv):
     file = open(FILENAME, 'wb+')
 
     #receive a packet from the socket, store the payload and sender address
-    recv = receiver_socket.recvfrom(BUFF_SIZE)
+    #recv = receiver_socket.recvfrom(BUFF_SIZE)
 
     #empty array to hold the sequence numbers of previously received packets
     last_sequence = None
 
     packets_received = 0
 
-    while (recv):
-        
+    while  True: #(recv):
+        recv = receiver_socket.recvfrom(BUFF_SIZE)
+
         received_packet = recv[0]
         sender_address = recv[1]
         
@@ -57,7 +58,7 @@ def main(argv):
             ack = seq_num
             receiver_socket.sendto(ack, sender_address)
 
-            recv = receiver_socket.recvfrom(BUFF_SIZE)
+            #recv = receiver_socket.recvfrom(BUFF_SIZE)
 
     print(packets_received)
     file.close()
