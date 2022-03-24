@@ -19,11 +19,8 @@ def main(argv):
     #open a new file that can be written to
     file = open(FILENAME, 'wb+')
 
-    #receive a packet from the socket, store the payload and sender address
-    #recv = receiver_socket.recvfrom(BUFF_SIZE)
-
     #empty array to hold the sequence numbers of previously received packets
-    last_sequence = None
+    last_sequence = (0).to_bytes(2, 'big')
 
     packets_received = 0
 
@@ -38,8 +35,7 @@ def main(argv):
         payload = received_packet[3:]
 
         if seq_num == last_sequence:
-            incorrectAck = seq_num
-            receiver_socket.sendto(incorrectAck, sender_address)
+            receiver_socket.sendto(last_sequence, sender_address)
             continue
 
         else:
@@ -53,14 +49,14 @@ def main(argv):
                 break
             
             packets_received += 1
+            
+            
             last_sequence = seq_num
             file.write(payload)
             ack = seq_num
+
             receiver_socket.sendto(ack, sender_address)
 
-            #recv = receiver_socket.recvfrom(BUFF_SIZE)
-
-    print(packets_received)
     file.close()
     receiver_socket.close()
 
