@@ -18,7 +18,7 @@ def main(argv):
 
     senderSocket = socket(AF_INET, SOCK_DGRAM)#Create socket
 
-    file = open(FILE, 'rb') #read the file (store it in file). 'r' means we read the file, 'b' means binary mode such as images.
+    file = open(FILE, 'rb') #read the file (store it in file). 'r' means we read the file, 'b' means binary mode such >
     read_file = file.read(BUFF_SIZE)
     packet_no = 0 #track the current packet being delivered
 
@@ -36,21 +36,21 @@ def main(argv):
         sequence_number = packet_no.to_bytes(2, 'big')
         
         file_to_send = bytearray(BUFF_SIZE + HEADER_SIZE)
-        file_to_send[0:2] = sequence_number #sequence number is 2 bytes long, starts from the index 0 and occupies both index 0 and 1
-        file_to_send[2:3] = end_of_file #end of file flag is 1 byte long and is directly after the sequence number, therefore it occupies index 2
-        file_to_send[3:] = bytearray(read_file) #the payload occupies the rest of the packet and starts after the end of file flag, therefore it occupies every index on and after index 3
+        file_to_send[0:2] = sequence_number #sequence number is 2 bytes long, starts from the index 0 and occupies bot>
+        file_to_send[2:3] = end_of_file #end of file flag is 1 byte long and is directly after the sequence number, th>
+        file_to_send[3:] = bytearray(read_file) #the payload occupies the rest of the packet and starts after the end >
 
         senderSocket.sendto(file_to_send, (HOST_NAME, HOST_PORT))
-        print("<PACKET %d HAS BEEN DELIVERED>"%packet_no)
+        #print("<PACKET %d HAS BEEN DELIVERED>"%packet_no)
 
         read_file = file.read(BUFF_SIZE)
         packet_no += 1
 
-        sleep(0.005)
+        sleep(0.001)
     
     file.close()
-
     senderSocket.close()
+    print('FILE HAS BEEN SENT')
 
 if __name__ == "__main__":
     main(sys.argv)
