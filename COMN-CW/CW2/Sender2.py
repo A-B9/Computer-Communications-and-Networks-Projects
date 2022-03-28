@@ -68,7 +68,6 @@ def main(argv):
 
         #print("update read_file")
         file_size += len(read_file) #update file size
-
         packet_no += 1 #update the packet counter
         read_file = file.read(BUFF_SIZE) #read in the next 1024 bytes of the file.
 

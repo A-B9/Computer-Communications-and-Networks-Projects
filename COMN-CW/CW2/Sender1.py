@@ -26,7 +26,6 @@ def main(argv):
         #if eof = 0, not the end of the fileSe
         #if eof = 1, it is the end of the file
         end_of_file = (0).to_bytes(1, 'big')
-
         
 
         if (len(read_file) < BUFF_SIZE):

@@ -23,7 +23,6 @@ def make_packet(data, sequence_number, eof):
     return send_file
 
 def main(argv):
-
     #command line arguements
     HOST = os.path.basename(argv[1])
     PORT = int(os.path.basename(argv[2]))
