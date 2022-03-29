@@ -5,15 +5,38 @@ import sys
 import os
 import time
 import math
+import threading
 
 BUFF_SIZE = 1024
 HEADER_SIZE = 3
 
-#need to create a logical timer that will begin when a packet is sent
-#there must be one logical timer per packet.
+HOST = os.path.basename(sys.argv[1])
+PORT = int(os.path.basename(sys.argv[2]))
+FILE = os.path.basename(sys.argv[3])
+TIMEOUT = int(os.path.basename(sys.argv[4])) / 1000
+WINDOW = int(os.path.basename(sys.argv[5]))
 
+sender_socket = socket(AF_INET, SOCK_DGRAM)
+print(f'socket has been created')
 
-#this function will create packets.
+file = open(FILE, 'rb')
+total_packets = math.ceil(os.path.getsize(FILE) / BUFF_SIZE)
+lock = threading.Lock()
+
+base = 1
+next_seq = 1
+eof = 0
+
+#tracks the window
+current_window = [None] * WINDOW
+#will track which sequence number in the window has been acked.
+is_window_acked = [False] * WINDOW
+
+start_time = time.perf_counter()
+
+file_sent = False
+
+#will create the packet
 def make_packet(data, sequence_number, eof):
     sequence_number = sequence_number.to_bytes(2, 'big')
     eof = eof.to_bytes(1, 'big')
@@ -27,99 +50,114 @@ def make_packet(data, sequence_number, eof):
     return send_file
 
 
-def main(argv):
+def next_packet_in_window():
+    global next_seq
+    global eof
 
-    HOST = os.path.basename(argv[1])
-    PORT = int(os.path.basename(argv[2]))
-    FILE = os.path.basename(argv[3])
-    TIMEOUT = int(os.path.basename(argv[4])) / 1000
-    WINDOW = int(os.path.basename(argv[5]))
+    payload = file.read(BUFF_SIZE)
+    eof_flag = eof
+    if next_seq == total_packets:
+        eof = 1
+        eof_flag = eof
+    print(f'made packet {next_seq}')
+    return make_packet(payload, next_seq, eof_flag)
 
-    sender_socket = socket(AF_INET, SOCK_DGRAM)
-    sender_socket.setblocking(0)
-    print(f'socket has been created')
+#this will update the window, if the base has been acked, updtes the window
+#by moving the window forward by one.
+#if base has not been acked but a packet >base has been acked
+#buffer the ack
+def update_current_window(ack_seq_num):
+    global current_window
+    global is_window_acked
+    global base
 
-    file = open(FILE, 'rb')
+    if (ack_seq_num < base):
+        return 
+    current_position = ack_seq_num - base
+    is_window_acked[current_position] = True
+    while (is_window_acked[0] == True):
+        del current_window[0]
+        current_window.append(None)
+        del is_window_acked[0]
+        is_window_acked.append(False)
+        base = base + 1
 
-    total_packets = math.ceil(os.path.getsize(FILE) / BUFF_SIZE)
+def packet_timeout(current_packet_seq):
 
-    base = 1
-    next_seq = 1 + WINDOW
+    lock.acquire()
+    if (current_packet_seq < base) or (is_window_acked[current_packet_seq - base]):
+        lock.release()
+        return
+    #resend packet if timeout occurs.
+    sender_socket.sendto(current_window[current_packet_seq - base], (HOST, PORT))
+    print(f'resending packet {current_packet_seq - base}')
+    timer = threading.Timer(TIMEOUT, packet_timeout, args=current_packet_seq)
+    timer.start()
+    lock.release()
 
-    #lock = threading.Lock()
+def send_thread_function():
+    global current_window
+    global start_time
+    global total_packets
+    global eof
+    global next_seq
 
-    #track the packets that have been received successfully
-    window_packet_tracker = []
-    #will turn to 1 before sending the final packet
-    eof_flag = 0
-    
-    #once the final packet has been sent, turn to True
-    file_sent = False
+    while True: #infinite loop
+        lock.acquire()
+        while (next_seq < base + WINDOW):
+            send_file = next_packet_in_window()
 
-    #create the first window
-    window_packet_tracker = [x for x in range(base, next_seq)]
-    print(f'first window has been created.')
+            if next_seq == 1:
+                start_time = time.perf_counter()
+            
+            current_pos = next_seq - base
+            current_window[current_pos] = send_file
 
-    #start the timer
-    start_time = time.perf_counter()
+            print(f'Sending packet {next_seq}')
 
-    #Send the packets in the first window
-    for seqnum in window_packet_tracker:
-        read_file = file.read(BUFF_SIZE)
-        send_file = make_packet(read_file, seqnum, eof_flag)
-        sender_socket.sendto(send_file, (HOST, PORT))
-        print(f'Send packet {seqnum}')
+            sender_socket.sendto(send_file, (HOST, PORT))
 
-    #while the full file has not been delivered to the receiver.
-    while (file_sent == False):
-        try:
-            #retreiev ack from the socket
-            ack , sender_addr = sender_socket.recvfrom(2)
-            ack = int.from_bytes(ack, 'big') #turn into an integer
+            timer = threading.Timer(TIMEOUT, timeout, args= (next_seq, ))
+            timer.start()
 
-            print(f'ACK receievd {ack}, base = {base}')
+            next_seq += 1
 
-            #if its the ack for the first sequence number in the window
-            if ack == base:
-                
-                #if the ack is for the final packet
-                if ack == (total_packets):
-                    file_sent = True
-                    break
-                
-                #ack for base has been received, move window along
-                base += 1
-                
-                if eof_flag != 1:
-                    next_seq += 1
+            if eof == 1:
+                lock.release()
+                return
 
-                #update the window.
-                print(f'Update the window')
-                window_packet_tracker = [x for x in range(base, next_seq)]
+        lock.release()
+        time.sleep(0.001)
 
-                if (next_seq - 1) == total_packets:
-                    print(f'final packet reached.')
-                    eof_flag = 1
+def receive_thread_function():
 
-                #send the next 
-                read_file = file.read(BUFF_SIZE)
-                send_file = make_packet(read_file, (next_seq -1), eof_flag)
+    while True:
+        ack, sender_addr = sender_socket.recvfrom(2)
 
-                sender_socket.sendto(send_file, (HOST, PORT))
-                print(f'new packet has been sent')
-                print(f'sending packet {next_seq - 1}')
-        except:
-            continue
+        lock.acquire()
 
-    total_time = time.perf_counter() - start_time
-    throughput = round((os.path.getsize(FILE)/1000) / total_time)
+        ack = int.from_bytes(ack, 'big')
+        print(f'received ACK {ack}')
+        update_current_window(ack)
 
-    print(f'{throughput}')
+        if (base > total_packets):
+            total_time = time.perf_counter() - start_time
+            throughput = round((os.path.getsize(FILE) / 1000) / total_time)
+            print(f'{throughput}')
+            print(f'PROCESS COMPLETE')
+            lock.release()
+            return
+        
+        lock.release()
 
-    sender_socket.close()
-    file.close()
+send_thread = threading.Thread(target=send_thread_function)
+receive_thread = threading.Thread(target=receive_thread_function)
 
+send_thread.start()
+receive_thread.start()
 
+send_thread.join()
+receive_thread.join()
 
-if __name__ == '__main__':
-    main(sys.argv)
+file.close()
+sender_socket.close()
