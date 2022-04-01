@@ -49,50 +49,19 @@ def make_packet(data, sequence_number, eof):
 
     return send_file
 
-
-def next_packet_in_window():
-    global next_seq
-    global eof
-
-    payload = file.read(BUFF_SIZE)
-    eof_flag = eof
-    if next_seq == total_packets:
-        eof = 1
-        eof_flag = eof
-    print(f'made packet {next_seq}')
-    return make_packet(payload, next_seq, eof_flag)
-
-#this will update the window, if the base has been acked, updtes the window
-#by moving the window forward by one.
-#if base has not been acked but a packet >base has been acked
-#buffer the ack
-def update_current_window(ack_seq_num):
-    global current_window
-    global is_window_acked
-    global base
-
-    if (ack_seq_num < base):
-        return 
-    current_position = ack_seq_num - base
-    is_window_acked[current_position] = True
-    while (is_window_acked[0] == True):
-        del current_window[0]
-        current_window.append(None)
-        del is_window_acked[0]
-        is_window_acked.append(False)
-        base = base + 1
-
 def packet_timeout(current_packet_seq):
-
     lock.acquire()
     if (current_packet_seq < base) or (is_window_acked[current_packet_seq - base]):
         lock.release()
         return
+
+    print(f'Packet: {current_packet_seq}, has timed out, will retransmit.')
     #resend packet if timeout occurs.
     sender_socket.sendto(current_window[current_packet_seq - base], (HOST, PORT))
     print(f'resending packet {current_packet_seq - base}')
-    timer = threading.Timer(TIMEOUT, packet_timeout, args=current_packet_seq)
+    timer = threading.Timer(TIMEOUT, packet_timeout, args=(current_packet_seq, ))
     timer.start()
+    print(f'Timer has been started')
     lock.release()
 
 def send_thread_function():
@@ -105,19 +74,28 @@ def send_thread_function():
     while True: #infinite loop
         lock.acquire()
         while (next_seq < base + WINDOW):
-            send_file = next_packet_in_window()
+
+            payload = file.read(BUFF_SIZE)
+            eof_flag = eof
+            if next_seq == total_packets:
+                eof = 1
+                eof_flag = eof
+            print(f'made next packet: {next_seq}')
+            send_file = make_packet(payload, next_seq, eof_flag)
 
             if next_seq == 1:
                 start_time = time.perf_counter()
-            
-            current_pos = next_seq - base
-            current_window[current_pos] = send_file
+
+            print(f'next packet in the window has been delivered')
+
+            #current_pos = next_seq - base
+            current_window[next_seq - base] = send_file
 
             print(f'Sending packet {next_seq}')
 
             sender_socket.sendto(send_file, (HOST, PORT))
 
-            timer = threading.Timer(TIMEOUT, timeout, args= (next_seq, ))
+            timer = threading.Timer(TIMEOUT, packet_timeout, args=(next_seq,))
             timer.start()
 
             next_seq += 1
@@ -127,9 +105,12 @@ def send_thread_function():
                 return
 
         lock.release()
-        time.sleep(0.001)
+        time.sleep(0.01)
 
 def receive_thread_function():
+    global current_window
+    global is_window_acked
+    global base
 
     while True:
         ack, sender_addr = sender_socket.recvfrom(2)
@@ -138,24 +119,54 @@ def receive_thread_function():
 
         ack = int.from_bytes(ack, 'big')
         print(f'received ACK {ack}')
-        update_current_window(ack)
+        #update_current_window(ack)
+
+        if (ack >= base):
+            #current_position = ack - base
+            is_window_acked[ack - base] = True
+            print(f'acks have been updated')
+            print(is_window_acked)
+
+            while (is_window_acked[0] == True):
+                print(f'Base in window has been acked, delete and update window by one.')
+
+                del current_window[0]
+                current_window.append(None)
+
+                del is_window_acked[0]
+                is_window_acked.append(False)
+
+                print(is_window_acked)
+
+                base = base + 1
+
+
+
+        print(f'ACK = {ack}, current base = {base}')
 
         if (base > total_packets):
+            print(f'Base is larger than the final seq_num: {base}')
+
             total_time = time.perf_counter() - start_time
             throughput = round((os.path.getsize(FILE) / 1000) / total_time)
+
             print(f'{throughput}')
             print(f'PROCESS COMPLETE')
+
             lock.release()
             return
         
         lock.release()
 
+print(f'generate the threads')
 send_thread = threading.Thread(target=send_thread_function)
 receive_thread = threading.Thread(target=receive_thread_function)
 
+print(f'start the threads')
 send_thread.start()
 receive_thread.start()
 
+print(f'join the threads')
 send_thread.join()
 receive_thread.join()
 
